@@ -57,13 +57,13 @@ runs:
               BASE_SHA="${{ github.event.pull_request.base.sha }}"
               HEAD_SHA="${{ github.event.pull_request.head.sha }}"
 
-              mkdir -p .viewfile-temp
+              mkdir -p .fileview-temp
 
               FILE_COUNT=0
               LARGE_CHANGE=false
 
               {
-                echo "# ViewFile Report"
+                echo "# Fileview Report"
                 echo
                 echo "Base: \`${BASE_SHA}\`"
                 echo "Head: \`${HEAD_SHA}\`"
@@ -88,6 +88,8 @@ runs:
                   ;;
               esac
 
+              git diff --name-status "$BASE_SHA" "$HEAD_SHA" > .fileview-temp/files.txt
+
               while IFS=$'\t' read -r STATUS FILE REST; do
                 TARGET=""
 
@@ -111,11 +113,11 @@ runs:
 
                 EXT="${TARGET##*.}"
 
-                BEFORE_SOURCE=".viewfile-temp/before.${EXT}"
-                AFTER_SOURCE=".viewfile-temp/after.${EXT}"
+                BEFORE_SOURCE=".fileview-temp/before.${EXT}"
+                AFTER_SOURCE=".fileview-temp/after.${EXT}"
 
-                BEFORE_DUMP=".viewfile-temp/before.yml"
-                AFTER_DUMP=".viewfile-temp/after.yml"
+                BEFORE_DUMP=".fileview-temp/before.yml"
+                AFTER_DUMP=".fileview-temp/after.yml"
 
                 rm -f "$BEFORE_SOURCE" "$AFTER_SOURCE"
                 rm -f "$BEFORE_DUMP" "$AFTER_DUMP"
@@ -137,7 +139,7 @@ runs:
                   rbx-fileview dump "$AFTER_SOURCE" > "$AFTER_DUMP"
                 fi
 
-                DIFF_FILE=".viewfile-temp/diff.txt"
+                DIFF_FILE=".fileview-temp/diff.txt"
 
                 diff -u "$BEFORE_DUMP" "$AFTER_DUMP" > "$DIFF_FILE" || true
 
@@ -183,10 +185,10 @@ runs:
                 echo '```' >> "$REPORT"
                 echo >> "$REPORT"
 
-              done < .viewfile-temp/files.txt
+              done < .fileview-temp/files.txt
 
               if [ "$FILE_COUNT" -eq 0 ]; then
-                echo "No changed .rbxl or .rbxlx files detected." >> "$REPORT"
+                echo "No changed Roblox files matching the selected file-types were detected." >> "$REPORT"
               fi
 
               echo "report-path=${REPORT}" >> "$GITHUB_OUTPUT"
@@ -209,7 +211,7 @@ runs:
           }
 
           const body =
-            '<!-- viewfile-report -->\n' +
+            '<!-- fileview-report -->\n' +
             fs.readFileSync('${{ steps.generate.outputs.report-path }}', 'utf8');
 
           await github.rest.issues.createComment({
