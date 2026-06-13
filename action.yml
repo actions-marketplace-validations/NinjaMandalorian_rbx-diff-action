@@ -1,5 +1,5 @@
 name: "Roblox Fileview Diff"
-description: "Generate pull request diffs for .rbxl and .rbxlx files using Fileview dumps."
+description: "Generate pull request diffs for place files, model files, or both using Fileview dumps."
 
 inputs:
   max-modified-lines:
@@ -11,6 +11,11 @@ inputs:
     description: "Comment the generated report on the pull request or issue"
     required: false
     default: "false"
+
+  file-types:
+    description: "Which Roblox file types to include: place, model, or both"
+    required: false
+    default: "both"
 
   max-display-lines:
     description: "Maximum diff lines displayed per file"
@@ -65,7 +70,23 @@ runs:
                 echo
               } > "$REPORT"
 
-              git diff --name-status "$BASE_SHA" "$HEAD_SHA" > .viewfile-temp/files.txt
+              FILE_TYPES="${{ inputs.file-types }}"
+
+              case "$FILE_TYPES" in
+                place)
+                  TARGET_PATTERN='\.(rbxl|rbxlx)$'
+                  ;;
+                model)
+                  TARGET_PATTERN='\.(rbxm|rbxmx)$'
+                  ;;
+                both)
+                  TARGET_PATTERN='\.(rbxl|rbxlx|rbxm|rbxmx)$'
+                  ;;
+                *)
+                  echo "Invalid file-types value: $FILE_TYPES" >&2
+                  exit 1
+                  ;;
+              esac
 
               while IFS=$'\t' read -r STATUS FILE REST; do
                 TARGET=""
@@ -82,7 +103,7 @@ runs:
                     ;;
                 esac
 
-                if [[ ! "$TARGET" =~ \.(rbxl|rbxlx)$ ]]; then
+                if [[ ! "$TARGET" =~ $TARGET_PATTERN ]]; then
                   continue
                 fi
 

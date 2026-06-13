@@ -4,7 +4,7 @@ Uses [rbx-fileview](https://github.com/Barocena/RBX-Fileview) to create readable
 
 ## Usage
 
-Add this action to your GitHub Actions workflow to generate readable diffs for Roblox files (`.rbxl` and `.rbxlx`):
+Add this action to your GitHub Actions workflow to generate readable diffs for Roblox files. You can target place files (`.rbxl`, `.rbxlx`), model files (`.rbxm`, `.rbxmx`), or both.
 
 ```yaml
 steps:
@@ -12,6 +12,7 @@ steps:
     uses: NinjaMandalorian/rbx-diff-action@v1
     with:
       comment: 'true'
+      file-types: 'both'
 ```
 
 Set `comment: 'true'` to post the generated report back to the pull request or issue when the workflow has a valid token and target number.
@@ -21,6 +22,7 @@ Set `comment: 'true'` to post the generated report back to the pull request or i
 | Input | Description | Default | Required |
 | --- | --- | --- | --- |
 | `comment` | Comment the generated report on the pull request or issue | `false` | No |
+| `file-types` | Which Roblox file types to include: `place`, `model`, or `both` | `both` | No |
 | `max-modified-lines` | Maximum modified lines before diff output is omitted | `1000` | No |
 | `max-display-lines` | Maximum diff lines displayed per file | `300` | No |
 | `report-path` | Path to generated markdown report | `viewfile-report.md` | No |
