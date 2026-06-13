@@ -9,7 +9,7 @@ Add this action to your GitHub Actions workflow to generate readable diffs for R
 ```yaml
 steps:
   - name: Generate Roblox File Diffs
-    uses: NinjaMandalorian/rbx-diff-action@v1
+    uses: NinjaMandalorian/rbx-diff-action@v1.0.1
     with:
       comment: 'true'
       file-types: 'both'
