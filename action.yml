@@ -1,0 +1,169 @@
+name: "Roblox Fileview Diff"
+description: "Generate pull request diffs for .rbxl and .rbxlx files using Fileview dumps."
+
+inputs:
+  max-modified-lines:
+    description: "Maximum modified lines before diff output is omitted"
+    required: false
+    default: "1000"
+
+  max-display-lines:
+    description: "Maximum diff lines displayed per file"
+    required: false
+    default: "300"
+
+  report-path:
+    description: "Path to generated markdown report"
+    required: false
+    default: "viewfile-report.md"
+
+outputs:
+  report-path:
+    description: "Generated markdown report"
+    value: ${{ steps.generate.outputs.report-path }}
+
+  changed-files-count:
+    description: "Number of Roblox files processed"
+    value: ${{ steps.generate.outputs.changed-files-count }}
+
+  has-large-changes:
+    description: "Whether any file exceeded the large-change threshold"
+    value: ${{ steps.generate.outputs.has-large-changes }}
+
+runs:
+  using: composite
+
+  steps:
+    - id: generate
+      shell: bash
+      run: |
+        set -eo pipefail
+
+          ````
+              REPORT="${{ inputs.report-path }}"
+              MAX_MODIFIED="${{ inputs.max-modified-lines }}"
+              MAX_DISPLAY="${{ inputs.max-display-lines }}"
+
+              BASE_SHA="${{ github.event.pull_request.base.sha }}"
+              HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+
+              mkdir -p .viewfile-temp
+
+              FILE_COUNT=0
+              LARGE_CHANGE=false
+
+              {
+                echo "# ViewFile Report"
+                echo
+                echo "Base: \`${BASE_SHA}\`"
+                echo "Head: \`${HEAD_SHA}\`"
+                echo
+              } > "$REPORT"
+
+              git diff --name-status "$BASE_SHA" "$HEAD_SHA" > .viewfile-temp/files.txt
+
+              while IFS=$'\t' read -r STATUS FILE REST; do
+                TARGET=""
+
+                case "$STATUS" in
+                  A|M|D)
+                    TARGET="$FILE"
+                    ;;
+                  R*)
+                    TARGET="$REST"
+                    ;;
+                  *)
+                    continue
+                    ;;
+                esac
+
+                if [[ ! "$TARGET" =~ \.(rbxl|rbxlx)$ ]]; then
+                  continue
+                fi
+
+                FILE_COUNT=$((FILE_COUNT + 1))
+
+                EXT="${TARGET##*.}"
+
+                BEFORE_SOURCE=".viewfile-temp/before.${EXT}"
+                AFTER_SOURCE=".viewfile-temp/after.${EXT}"
+
+                BEFORE_DUMP=".viewfile-temp/before.yml"
+                AFTER_DUMP=".viewfile-temp/after.yml"
+
+                rm -f "$BEFORE_SOURCE" "$AFTER_SOURCE"
+                rm -f "$BEFORE_DUMP" "$AFTER_DUMP"
+
+                touch "$BEFORE_DUMP"
+                touch "$AFTER_DUMP"
+
+                echo "Processing ${TARGET}"
+
+                if git cat-file -e "${BASE_SHA}:${TARGET}" 2>/dev/null; then
+                  git show "${BASE_SHA}:${TARGET}" > "$BEFORE_SOURCE"
+
+                  rbx-fileview dump "$BEFORE_SOURCE" > "$BEFORE_DUMP"
+                fi
+
+                if git cat-file -e "${HEAD_SHA}:${TARGET}" 2>/dev/null; then
+                  git show "${HEAD_SHA}:${TARGET}" > "$AFTER_SOURCE"
+
+                  rbx-fileview dump "$AFTER_SOURCE" > "$AFTER_DUMP"
+                fi
+
+                DIFF_FILE=".viewfile-temp/diff.txt"
+
+                diff -u "$BEFORE_DUMP" "$AFTER_DUMP" > "$DIFF_FILE" || true
+
+                MODIFIED_LINES=$(
+                  grep -E '^[+-]' "$DIFF_FILE" \
+                    | grep -vE '^(\+\+\+|---)' \
+                    | wc -l \
+                    | tr -d ' '
+                )
+
+                {
+                  echo "## ${TARGET}"
+                  echo
+                  echo "- Modified lines: ${MODIFIED_LINES}"
+                  echo
+                } >> "$REPORT"
+
+                if [ "$MODIFIED_LINES" -gt "$MAX_MODIFIED" ]; then
+                  LARGE_CHANGE=true
+
+                  {
+                    echo "> Large change detected (${MODIFIED_LINES} modified lines)."
+                    echo "> Diff omitted."
+                    echo
+                  } >> "$REPORT"
+
+                  continue
+                fi
+
+                DIFF_LINES=$(wc -l < "$DIFF_FILE" | tr -d ' ')
+
+                echo '```diff' >> "$REPORT"
+
+                if [ "$DIFF_LINES" -gt "$MAX_DISPLAY" ]; then
+                  head -n "$MAX_DISPLAY" "$DIFF_FILE" >> "$REPORT"
+
+                  echo >> "$REPORT"
+                  echo "... diff truncated ..." >> "$REPORT"
+                else
+                  cat "$DIFF_FILE" >> "$REPORT"
+                fi
+
+                echo '```' >> "$REPORT"
+                echo >> "$REPORT"
+
+              done < .viewfile-temp/files.txt
+
+              if [ "$FILE_COUNT" -eq 0 ]; then
+                echo "No changed .rbxl or .rbxlx files detected." >> "$REPORT"
+              fi
+
+              echo "report-path=${REPORT}" >> "$GITHUB_OUTPUT"
+              echo "changed-files-count=${FILE_COUNT}" >> "$GITHUB_OUTPUT"
+              echo "has-large-changes=${LARGE_CHANGE}" >> "$GITHUB_OUTPUT"
+          ````
